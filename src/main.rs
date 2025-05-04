@@ -67,10 +67,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>>  {
 
 
     // Say hello
-    socket.emit_with_ack("getJoinData", Payload::Text(vec![]), Duration::from_secs(2), |p, s| on_ack("getJoinData", p, s))
-         .expect("Server unreachable");
+    for _ in 0..2 {
+        socket
+            .emit_with_ack("getJoinData", Payload::Text(vec![]), Duration::from_secs(2), |p, s| on_ack("getJoinData", p, s))
+            .expect("Server unreachable");
+        sleep(Duration::from_secs(1));
+    }
 
-    sleep(Duration::from_secs(5));
+    sleep(Duration::from_secs(10));
     socket.disconnect().expect("Disconnect failed");
     Ok(())
 }
