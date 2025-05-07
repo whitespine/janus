@@ -1198,9 +1198,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a6a8672db895d567b3c0b8a4c0d3e98113ebb32badf6ce66004e743e5ee1e1e"
 dependencies = [
  "adler32",
+ "async-stream",
  "backoff",
  "base64 0.21.7",
  "bytes",
+ "futures-util",
  "log",
  "native-tls",
  "rand",
@@ -1208,6 +1210,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+ "tokio",
  "url",
 ]
 
@@ -1555,7 +1558,19 @@ dependencies = [
  "mio",
  "pin-project-lite",
  "socket2",
+ "tokio-macros",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "tokio-macros"
+version = "2.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e06d43f1345a3bcd39f6a56dbb7dcab2ba47e68e8ac134855e7e2bdbaf8cab8"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -1747,10 +1762,11 @@ name = "voyeur"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "futures-util",
  "reqwest",
- "rust_engineio",
  "rust_socketio",
  "serde_json",
+ "tokio",
  "url",
 ]
 
