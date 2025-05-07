@@ -5,8 +5,36 @@ use rust_socketio::{
     Event, Payload, TransportType,
 };
 use tokio::sync::{broadcast, mpsc};
+use tokio::sync::broadcast::error::RecvError;
 use tokio::time::{sleep, Duration};
 use url::Url;
+
+async fn promise_socket_emit(socket: &Client, event: &str, payload: Payload) -> Option<Payload> {
+    // Would prefer to use oneshot, but cannot - emit_with_ack takes a FnMut, not a FnOnce, and is therefore incompatible
+    let (tx, mut rx) = broadcast::channel::<Payload>(1);
+
+    // Send the message
+    socket
+        .emit_with_ack(
+            event,
+            payload,
+            Duration::from_secs(2),
+            move |payload: Payload, _| {
+                let listener_tx = tx.clone(); // This is the only way I could get this code to compile
+                async move {
+                    listener_tx.send(payload).expect("Cannot send payload");
+                }.boxed()
+            },
+        )
+        .await
+        .expect("Server unreachable");
+
+    // Await the value that the emit-with-ack has sent
+    match rx.recv().await {
+        Ok(p) => Some(p),
+        Err(_) => None
+    }
+}
 
 /// Simple program to greet a person
 #[derive(Parser, Debug)]
@@ -124,47 +152,21 @@ impl FoundryClientBuilder {
 
     pub async fn acquire_user_id(mut self) -> Self {
         if let Some(socket) = self.socket.as_ref() {
-            // Would prefer to use oneshot, but cannot - emit_with_ack takes a FnMut, not a FnOnce, and is therefore incompatible
-            let (tx, mut rx) = broadcast::channel::<String>(1);
-
-            // Send the message
-            socket
-                .emit_with_ack(
-                    "getJoinData",
-                    Payload::Text(vec![]),
-                    Duration::from_secs(2),
-                    move |payload: Payload, _| {
-                        let listener_tx = tx.clone(); // This is the only way I could get this code to compile
-                        async move {
-                            match payload {
-                                Payload::Text(mut items) => {
-                                    let item = items.pop().unwrap();
-                                    for user in item[0]["users"].as_array().unwrap() {
-                                        if user["name"] == "Voyeur" {
-                                            listener_tx
-                                                .send(user["_id"].to_string())
-                                                .expect("Failed to send recovered user id");
-                                            return;
-                                        }
-                                    }
-                                    panic!("Unable to find a user named 'Voyeur'");
-                                }
-                                _ => {}
-                            }
-                        }
-                        .boxed()
-                    },
-                )
-                .await
-                .expect("Server unreachable");
-
-            // Await the value that the emit-with-ack has sent
-            let user_id = rx.recv().await.expect("Something went wrong while waiting for 'getJoinData' to return. Perhaps it did not find a user id, or perhaps the connection failed");
-            println!("Acquire user ID: {}", user_id);
-            self.user_id = Some(user_id);
+            let payload = promise_socket_emit(socket, "getJoinData", Payload::Text(vec![])).await;
+            match payload {
+                Some(Payload::Text(mut items)) => {
+                    let item = items.pop().unwrap();
+                    self.user_id = item[0]["users"].as_array().unwrap().iter().find(
+                        |user| user["name"] == "Voyeur"
+                    ).map(|x| Some(x["_id"].to_string())).expect("Unable to find a user named voyeur");
+                },
+                _ => panic!("Unable to acquire user id")
+            };
         } else {
             panic!("Must initialize socket before acquiring user id")
         }
+
+        println!("Got userid: {:?}",  self.user_id);
 
         self
     }
