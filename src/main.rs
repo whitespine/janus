@@ -136,14 +136,13 @@ impl FoundryClientBuilder {
                     move |payload: Payload, _| {
                         let listener_tx = tx.clone(); // This is the only way I could get this code to compile
                         async move {
-                            print_payload(payload.clone());
                             match payload {
                                 Payload::Text(mut items) => {
                                     let item = items.pop().unwrap();
                                     for user in item[0]["users"].as_array().unwrap() {
                                         if user["name"] == "Voyeur" {
                                             listener_tx
-                                                .send(user["id"].to_string())
+                                                .send(user["_id"].to_string())
                                                 .expect("Failed to send recovered user id");
                                             return;
                                         }
