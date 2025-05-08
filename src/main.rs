@@ -1,4 +1,8 @@
+mod error;
+
+use std::fmt::Display;
 use clap::Parser;
+use futures_util::future::err;
 use futures_util::FutureExt;
 use rust_socketio::{
     asynchronous::{Client, ClientBuilder},
@@ -8,6 +12,7 @@ use tokio::sync::{broadcast, mpsc};
 use tokio::sync::broadcast::error::RecvError;
 use tokio::time::{sleep, Duration};
 use url::Url;
+use error::*;
 
 async fn promise_socket_emit(socket: &Client, event: &str, payload: Payload) -> Option<Payload> {
     // Would prefer to use oneshot, but cannot - emit_with_ack takes a FnMut, not a FnOnce, and is therefore incompatible
@@ -75,17 +80,19 @@ struct FoundryClient {
     user_id: String,
 }
 
+
+
 impl FoundryClientBuilder {
-    async fn establish_session(mut self) -> Self {
+    async fn establish_session(mut self) -> Result<Self, FoundryClientError> {
         let args = Args::parse();
 
         // Establish a session
         let response = reqwest::get(format!("{}/join", args.host))
             .await
-            .expect("Could not connect to join page. Is the world started?");
+            .map_err(|err| FoundryClientError::JoinError(err))?;
         let session = response.cookies().find(|cookie| cookie.name() == "session");
-        self.session_id = Some(session.expect("Could not find session").value().to_string());
-        self
+        self.session_id = Some(session.expect("UNRECOVERABLE: Could not acquire session").value().to_string());
+        Ok(self)
     }
 
     /// Build a new http client
@@ -95,16 +102,16 @@ impl FoundryClientBuilder {
             reqwest::ClientBuilder::new()
                 .cookie_store(true)
                 .build()
-                .expect("Error building reqwest::Client"),
+                .expect("UNRECOVERABLE: Unable to build HTTP client"),
         );
         self
     }
 
-    async fn establish_socket(mut self) -> Self {
+    async fn establish_socket(mut self) -> Result<Self, FoundryClientError> {
         let args = Args::parse();
 
         // Incorporate it into url
-        let mut session_url = Url::parse(&args.host).expect("Invalid URL");
+        let mut session_url = Url::parse(&args.host).map_err(|err| FoundryClientError::URLError(err))?;
         session_url.path_segments_mut().unwrap().push("socket.io/"); // Technically should be out of here, but this flag is stupid anyway
         session_url
             .query_pairs_mut()
@@ -128,9 +135,9 @@ impl FoundryClientBuilder {
                 .on_any(generic_callback)
                 .connect()
                 .await
-                .expect("Connection error"),
+                .map_err(|err| FoundryClientError::SocketError(err))?
         );
-        self
+        Ok(self)
     }
 
     /// Wait until socket and other components are ready
@@ -150,34 +157,42 @@ impl FoundryClientBuilder {
     }
     */
 
-    pub async fn acquire_user_id(mut self) -> Self {
+    pub async fn acquire_user_id(mut self) -> Result<Self, FoundryClientError> {
         if let Some(socket) = self.socket.as_ref() {
             let payload = promise_socket_emit(socket, "getJoinData", Payload::Text(vec![])).await;
             match payload {
                 Some(Payload::Text(mut items)) => {
                     let item = items.pop().unwrap();
-                    self.user_id = item[0]["users"].as_array().unwrap().iter().find(
-                        |user| user["name"] == "Voyeur"
-                    ).map(|x| Some(x["_id"].to_string())).expect("Unable to find a user named voyeur");
+                    self.user_id = item[0]["users"]
+                            .as_array()
+                            .unwrap().iter().find(
+                                |user| user["name"] == "Voyeur"
+                            )
+                            .map(
+                                |x| x["_id"].to_string()
+                            );
                 },
-                _ => panic!("Unable to acquire user id")
+                _ => panic!("UNRECOVERABLE: getJoinData returned non-json data")
             };
         } else {
-            panic!("Must initialize socket before acquiring user id")
+            panic!("UNRECOVERABLE: Must initialize socket before acquiring user id")
         }
 
         println!("Got userid: {:?}",  self.user_id);
+        if let None = self.user_id {
+            return Err(FoundryClientError::NoUserError("Voyeur".into()));
+        }
 
-        self
+        Ok(self)
     }
 
     /// Finalize the values in the builder
     pub fn build(self) -> FoundryClient {
         FoundryClient {
-            socket: self.socket.expect("Missing socket"),
-            http_client: self.http_client.expect("Missing http client"),
-            session_id: self.session_id.expect("Missing session id"),
-            user_id: self.user_id.expect("Missing user id"),
+            socket: self.socket.expect("Missing socket - be sure to establish_socket"),
+            http_client: self.http_client.expect("Missing http client - be sure to build_client"),
+            session_id: self.session_id.expect("Missing session id - be sure to establish_session"),
+            user_id: self.user_id.expect("Missing user id - be sure to acquire_user_id"),
         }
     }
 }
@@ -213,13 +228,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _client = FoundryClientBuilder::default()
         .build_client()
         .establish_session()
-        .await
+        .await?
         .establish_socket()
-        .await
+        .await?
         .wait_ready()
         .await
         .acquire_user_id()
-        .await
+        .await?
         .build();
     sleep(Duration::from_secs(10)).await;
     // socket.disconnect().expect("Disconnect failed");
