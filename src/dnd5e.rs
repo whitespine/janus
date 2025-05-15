@@ -23,135 +23,135 @@ pub enum DND5EActor {
 #[derive(Serialize, Deserialize, Default)]
 pub struct Skills {
     #[serde(rename="acr")]
-    acrobatics: Skill,
+    pub acrobatics: Skill,
 
     #[serde(rename="ani")]
-    animal_handling: Skill,
+    pub animal_handling: Skill,
 
     #[serde(rename="arc")]
-    arcana: Skill,
+    pub arcana: Skill,
 
     #[serde(rename="ath")]
-    athletics: Skill,
+    pub athletics: Skill,
 
     #[serde(rename="dec")]
-    deception: Skill,
+    pub deception: Skill,
 
     #[serde(rename="his")]
-    history: Skill,
+    pub history: Skill,
 
     #[serde(rename="ins")]
-    insight: Skill,
+    pub insight: Skill,
 
     #[serde(rename="inv")]
-    investigation: Skill,
+    pub investigation: Skill,
 
     #[serde(rename="itm")]
-    intimidation: Skill,
+    pub intimidation: Skill,
 
     #[serde(rename="med")]
-    medicine: Skill,
+    pub medicine: Skill,
 
     #[serde(rename="nature")]
-    nature: Skill,
+    pub nature: Skill,
 
     #[serde(rename="per")]
-    persuasion: Skill,
+    pub persuasion: Skill,
 
     #[serde(rename="prc")]
-    perception: Skill,
+    pub perception: Skill,
 
     #[serde(rename="prf")]
-    performance: Skill,
+    pub performance: Skill,
 
     #[serde(rename="rel")]
-    religion: Skill,
+    pub religion: Skill,
 
     #[serde(rename="slt")]
-    sleight_of_hand: Skill,
+    pub sleight_of_hand: Skill,
 
     #[serde(rename="ste")]
-    stealth: Skill,
+    pub stealth: Skill,
 
     #[serde(rename="sur")]
-    survival: Skill,
+    pub survival: Skill,
 }
 
 #[derive(Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct Skill {
-    ability: String,
-    bonuses: SkillBonuses,
+    pub ability: String,
+    pub bonuses: SkillBonuses,
 }
 
 #[derive(Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct SkillBonuses {
-    check: String,
-    passives: String,
+    pub check: String,
+    pub passives: String,
 }
 
 #[derive(Serialize, Deserialize, Default)]
 pub struct Attributes {
-    ac: ArmorClass,
-    hp: HitPoints
+    pub ac: ArmorClass,
+    pub hp: HitPoints
 }
 
 #[derive(Serialize, Deserialize, Default)]
 pub struct ArmorClass {
     /// Observed to be "flat" or "default"
-    calc: String,
-    flat: Option<u8>,
-    formula: Option<String>
+    pub calc: String,
+    pub flat: Option<u8>,
+    pub formula: Option<String>
 }
 
 #[derive(Serialize, Deserialize, Default)]
 pub struct HitPoints {
-    value: i32,
-    max: i32,
-    temp: Option<i32>,
-    tempmax: Option<i32>,
-    bonuses: Option<Value>,
-    formula: Option<String>
+    pub value: i32,
+    pub max: i32,
+    pub temp: Option<i32>,
+    pub tempmax: Option<i32>,
+    pub bonuses: Option<Value>,
+    pub formula: Option<String>
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct Abilities {
-    cha: AbilityScore,
-    con: AbilityScore,
-    dex: AbilityScore,
-    int: AbilityScore,
-    str: AbilityScore,
-    wis: AbilityScore,
+    pub cha: AbilityScore,
+    pub con: AbilityScore,
+    pub dex: AbilityScore,
+    pub int: AbilityScore,
+    pub str: AbilityScore,
+    pub wis: AbilityScore,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct AbilityScore {
-    value: u8,
-    proficient: u8,
-    bonuses: AbilityScoreBonus,
-    save: String
+    pub value: u8,
+    pub proficient: u8,
+    pub bonuses: AbilityScoreBonus,
+    pub save: String
     // Unsure what the rest means or whether it matters
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct AbilityScoreBonus {
-    check: String,
-    save: String
+    pub check: String,
+    pub save: String
 }
 
 
 #[derive(Serialize, Deserialize)]
 pub struct DND5EItem {
     #[serde(flatten)]
-    base: BaseItem
+    pub base: BaseItem
 
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct DND5EToken {
     #[serde(flatten)]
-    base: BaseToken
+    pub base: BaseToken
 }
 
 pub type DND5EWorld = World<DND5EActor, DND5EItem, DND5EToken>;

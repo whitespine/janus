@@ -6,33 +6,33 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize)]
 pub struct World<ItemType, ActorType, TokenType> {
     #[serde(rename="activeUsers")]
-    active_users: Vec<String>,
-    actors: Vec<ActorType>,
-    items: Vec<ItemType>,
-    scenes: Vec<Scene<TokenType>>,
+    pub active_users: Vec<String>,
+    pub actors: Vec<ActorType>,
+    pub items: Vec<ItemType>,
+    pub scenes: Vec<Scene<TokenType>>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct Scene<TokenType> {
     #[serde(flatten)]
-    document: Document,
+    pub document: Document,
 
-    active: bool,
-    background: Value,
-    tokens: Vec<TokenType>,
+    pub active: bool,
+    pub background: Value,
+    pub tokens: Vec<TokenType>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct Document {
     #[serde(rename="_id")]
-    id: String,
-    img: String,
-    name: String,
-    flags: Value,
-    folder: Option<String>,
-    ownership: OwnershipMap,
+    pub id: String,
+    pub img: String,
+    pub name: String,
+    pub flags: Value,
+    pub folder: Option<String>,
+    pub ownership: OwnershipMap,
     #[serde(rename="type")]
-    data_type: String,
+    pub data_type: String,
 }
 
 #[derive(Serialize_repr, Deserialize_repr, PartialEq, Debug)]
@@ -48,38 +48,38 @@ pub enum Permissions {
 #[derive(Serialize, Deserialize)]
 pub struct OwnershipMap {
     /// Default permission level
-    default: Permissions,
+    pub default: Permissions,
     /// Maps player id to their permission level
     #[serde(flatten)]
-    players: HashMap<String, Permissions>
+    pub players: HashMap<String, Permissions>
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct Flags {
     /// Capture all miscellaneous flag data
     #[serde(flatten)]
-    items: HashMap<String, Value>
+    pub items: HashMap<String, Value>
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct BaseActor<ItemType, TokenType> {
     #[serde(flatten)]
-    document: Document,
+    pub document: Document,
 
-    items:  Vec<ItemType>,
+    pub items:  Vec<ItemType>,
 
     #[serde(rename="prototypeToken")]
-    prototype_token: TokenType
+    pub prototype_token: TokenType
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct BaseItem {
     #[serde(flatten)]
-    document: Document,
+    pub document: Document,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct BaseToken {
     #[serde(flatten)]
-    document: Document,
+    pub document: Document,
 }

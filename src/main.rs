@@ -40,12 +40,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let host = Args::parse().host;
     let client = FoundryClient::new(&host).await?;
 
+    println!("Attempting get world");
     let world = client.emit("world", Payload::Text(vec![])).await.unwrap();
+    println!("Attempting parse world");
     let world = to_one_json(world);
     let world: DND5EWorld = serde_json::from_value(world)?; // DND5EWorld::deserialize(to_one_json(world))?;
 
-    // for(let )
+    for actor in world.actors.iter() {
+        println!("Found an actor named {}", actor.base.document.name)
+    }
 
+    println!("Finished, waiting for shutdown");
     sleep(Duration::from_secs(10)).await;
     // socket.disconnect().expect("Disconnect failed");
     Ok(())

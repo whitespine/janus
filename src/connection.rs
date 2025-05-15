@@ -163,6 +163,10 @@ impl FoundryClientBuilder {
         Ok(self)
     }
 
+    pub async fn login(mut self) -> Result<Self, FoundryClientError> {
+        Ok(self)
+    }
+
     /// Finalize the values in the builder
     pub fn build(self) -> FoundryClient {
         FoundryClient {
@@ -194,12 +198,14 @@ impl FoundryClient {
             .await
             .acquire_user_id()
             .await?
+            .login()
+            .await?
             .build();
         Ok(client)
     }
 
     pub async fn emit(&self, event: &str, payload: Payload) -> Option<Payload> {
-        promise_socket_emit(&self.socket, event, payload, Duration::from_secs(5)).await
+        promise_socket_emit(&self.socket, event, payload, Duration::from_secs(15)).await
     }
 }
 
