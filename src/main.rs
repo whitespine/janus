@@ -36,12 +36,7 @@ fn to_one_json(payload: Payload) -> serde_json::Value {
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Make a basic client
-    let host = Args::parse().host;
-    let client = FoundryClient::new(&host, "Voyeur", "").await?;
-
+async fn get_world(client: &FoundryClient) -> Result<DND5EWorld, Box<dyn std::error::Error>> {
     println!("Attempting get world");
     let payload = client.emit("world", Payload::Text(vec![])).await.unwrap();
     println!("Attempting parse world");
@@ -59,9 +54,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("PATH: {}\nERR: {}\n", path, err.inner());
         }
     }
-    let world: DND5EWorld = serde_json::from_value(raw_world.clone())?; // DND5EWorld::deserialize(to_one_json(world))?;
+    let world: DND5EWorld = serde_json::from_value(raw_world.clone())?;
+    Ok(world)
+}
 
-    for actor in world.actors.iter() {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Make a basic client
+    let host = Args::parse().host;
+    let client = FoundryClient::new(&host, "Voyeur", "").await?;
+
+    for actor in get_world(&client).await?.actors.iter() {
         match actor {
             DND5EActor::npc { base, .. } => {
                 println!("Found an npc named {}", base.document.name)
