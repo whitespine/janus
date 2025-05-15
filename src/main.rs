@@ -4,7 +4,7 @@ pub mod error;
 mod world;
 
 use crate::connection::FoundryClient;
-use crate::dnd5e::{DND5EActor, DND5EWorld};
+use crate::dnd5e::{DND5EActor, DND5EItem, DND5EWorld};
 use clap::Parser;
 use rust_socketio::Payload;
 use tokio::fs::File;
@@ -103,19 +103,60 @@ async fn roll(
         }
         false
     }).ok_or(CommandError::InvalidAssocChar)?;
-    let DND5EActor::character { system, .. } = actor else { Err(CommandError::InvalidAssocChar)? };
+    let DND5EActor::character { system, base } = actor else { Err(CommandError::InvalidAssocChar)? };
 
-    // Do stuff conditionally
-    let stat_value = match stat.as_str() {
-        "str" | "strength" => system.abilities.str.value,
-        "dex" | "dexterity" => system.abilities.str.value,
-        "cha" | "charisma" => system.abilities.str.value,
-        "int" | "intelligence" => system.abilities.str.value,
-        "wis" | "wisdom" => system.abilities.str.value,
-        "con" | "constitution" => system.abilities.str.value,
+    // We will need proficiency in a lot of cases
+    let mut total_level = 0;
+    for item in &base.items {
+        match item {
+            DND5EItem::class { system, .. } => { total_level += system.levels.unwrap_or(0); }
+            _ => {} // Don't care
+        }
+    }
+    let proficiency = match total_level {
+        0..=4 => 2,
+        5..=8 => 3,
+        9..=12 => 4,
+        13..=16 => 5,
+        17..=20 => 6,
+        _ => 7
+    };
+
+    // Get the appropriate stats
+    let (ability_score, proficiency_factor) = match stat.as_str() {
+        "str" | "strength"      => (system.abilities.str.value, 0f32),
+        "dex" | "dexterity"     => (system.abilities.str.value, 0f32),
+        "cha" | "charisma"      => (system.abilities.str.value, 0f32),
+        "int" | "intelligence"  => (system.abilities.str.value, 0f32),
+        "wis" | "wisdom"        => (system.abilities.str.value, 0f32),
+        "con" | "constitution"  => (system.abilities.str.value, 0f32),
+        "acr" | "acrobatics" => (system.abilities.dex.value, system.skills.acrobatics.value.unwrap_or(0f32)),
+        "ani" | "animal" | "animals" => (system.abilities.wis.value, system.skills.animal_handling.value.unwrap_or(0f32)),
+        "arc" | "arcana" => (system.abilities.int.value, system.skills.arcana.value.unwrap_or(0f32)),
+        "ath" | "athletics" => (system.abilities.str.value, system.skills.athletics.value.unwrap_or(0f32)),
+        "dec" | "deception" => (system.abilities.cha.value, system.skills.deception.value.unwrap_or(0f32)),
+        "his" | "history" => (system.abilities.int.value, system.skills.history.value.unwrap_or(0f32)),
+        "ins" | "insight" => (system.abilities.wis.value, system.skills.insight.value.unwrap_or(0f32)),
+        "inv" | "investigation" => (system.abilities.int.value, system.skills.investigation.value.unwrap_or(0f32)),
+        "itm" | "intimidation" => (system.abilities.cha.value, system.skills.intimidation.value.unwrap_or(0f32)),
+        "med" | "medicine" => (system.abilities.wis.value, system.skills.medicine.value.unwrap_or(0f32)),
+        "nat" | "nature" => (system.abilities.int.value, system.skills.nature.value.unwrap_or(0f32)),
+        "per" | "persuasion" => (system.abilities.cha.value, system.skills.persuasion.value.unwrap_or(0f32)),
+        "prc" | "perception" => (system.abilities.wis.value, system.skills.perception.value.unwrap_or(0f32)),
+        "prf" | "performance" => (system.abilities.cha.value, system.skills.performance.value.unwrap_or(0f32)),
+        "rel" | "religion" => (system.abilities.int.value, system.skills.religion.value.unwrap_or(0f32)),
+        "slt" | "sleight" | "sleight of hand" => (system.abilities.dex.value, system.skills.sleight_of_hand.value.unwrap_or(0f32)),
+        "ste" | "stealth" => (system.abilities.dex.value, system.skills.stealth.value.unwrap_or(0f32)),
+        "sur" | "survival" => (system.abilities.wis.value, system.skills.survival.value.unwrap_or(0f32)),
         _ => Err(InvalidAttribute(stat))?
     };
-    ctx.say(format!("Found your character. They have a strength of {}", system.abilities.str.value)).await?;
+
+    // Now coerce the proficiency to an integer, use a small rounding factor to ensure its more reliable
+    let proficiency = ((proficiency as f32) * proficiency_factor + 0.25f32).floor() as i32;
+
+    // While we're at it, convert the stat to a bonus
+    let ability_mod = (((ability_score as f32) - 10f32) / 2f32).floor() as i32;
+    ctx.say(format!("Were you to roll this, you would do so with a base bonus of {}, and a proficiency modifier of {}", ability_mod, proficiency)).await?;
 
     Ok(())
 }

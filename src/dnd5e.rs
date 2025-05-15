@@ -98,6 +98,7 @@ pub struct Skills {
 pub struct Skill {
     pub ability: String,
     pub bonuses: SkillBonuses,
+    pub value: Option<f32>
 }
 
 #[derive(Serialize, Deserialize)]
@@ -163,12 +164,34 @@ pub struct AbilityScoreBonus {
     pub save: String
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum DND5EItem {
+    class {
+        #[serde(flatten)]
+        base: BaseItem,
+        system: ClassSystem,
+    },
+
+    base {}, // Apparently unused, but we support
+    background {},
+    consumable {},
+    container {},
+    backpack {}, // What's the difference? Who knows
+    equipment {},
+    facility {},
+    feat {},
+    loot {},
+    race {}, // Aka species
+    spell {},
+    subclass {},
+    tool {},
+    weapon {},
+}
 
 #[derive(Serialize, Deserialize)]
-pub struct DND5EItem {
-    // #[serde(flatten)]
-    // pub base: BaseItem
-
+pub struct ClassSystem {
+    pub levels: Option<u8>
 }
 
 #[derive(Serialize, Deserialize)]
