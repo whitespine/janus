@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::error::*;
 use futures_util::FutureExt;
 use rust_socketio::{
@@ -76,11 +78,11 @@ pub struct FoundryClient {
     /// Our websocket
     pub socket: Client,
     /// Our non blocking http client, used for session acquisition & login
-    pub http_client: reqwest::Client,
+    http_client: reqwest::Client,
     /// The current session
-    pub session_id: String,
+    session_id: String,
     /// The user id associated with our current session
-    pub user_id: String,
+    user_id: String,
 }
 
 impl FoundryClientBuilder {
@@ -145,7 +147,7 @@ impl FoundryClientBuilder {
                 .await
                 .map_err(|err| FoundryClientError::SocketError(err))?,
         );
-        sleep(Duration::from_secs(2)).await;
+        sleep(Duration::from_secs(1)).await;
         Ok(self)
     }
 
@@ -193,7 +195,7 @@ impl FoundryClientBuilder {
                     "action": "join"
                 });
             // let response = client.post("https://echo.free.beeceptor.com")
-            let response = client.post(format!("{}/join", host))
+            client.post(format!("{}/join", host))
                 .json(&payload)
                 .send().await
                 .map_err(|err| FoundryClientError::JoinError(err))?;

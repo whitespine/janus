@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use crate::world::{World, BaseActor, BaseToken, BaseItem};
+use crate::world::{World, BaseActor, BaseToken, BaseItem, Document};
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -13,14 +13,30 @@ pub enum DND5EActor {
         system: Value,
     },
 
-    player {
+    character {
         #[serde(flatten)]
         base: BaseActor<DND5EItem, DND5EToken>,
-        system: Value,
+        system: CharacterSystem,
     },
+
+    vehicle {
+        system: Value,
+
+    },
+
+    group {
+        system: Value,
+    }
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize)]
+pub struct CharacterSystem {
+    attributes: Attributes,
+    skills: Skills
+}
+
+
+#[derive(Serialize, Deserialize)]
 pub struct Skills {
     #[serde(rename="acr")]
     pub acrobatics: Skill,
@@ -52,7 +68,7 @@ pub struct Skills {
     #[serde(rename="med")]
     pub medicine: Skill,
 
-    #[serde(rename="nature")]
+    #[serde(rename="nat")]
     pub nature: Skill,
 
     #[serde(rename="per")]
@@ -77,27 +93,27 @@ pub struct Skills {
     pub survival: Skill,
 }
 
-#[derive(Serialize, Deserialize, Default)]
-#[serde(default)]
+#[derive(Serialize, Deserialize)]
 pub struct Skill {
     pub ability: String,
     pub bonuses: SkillBonuses,
 }
 
-#[derive(Serialize, Deserialize, Default)]
-#[serde(default)]
+#[derive(Serialize, Deserialize)]
 pub struct SkillBonuses {
+    #[serde(default)]
     pub check: String,
+    #[serde(default)]
     pub passives: String,
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize)]
 pub struct Attributes {
     pub ac: ArmorClass,
     pub hp: HitPoints
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize)]
 pub struct ArmorClass {
     /// Observed to be "flat" or "default"
     pub calc: String,
@@ -105,10 +121,11 @@ pub struct ArmorClass {
     pub formula: Option<String>
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize)]
 pub struct HitPoints {
+    #[serde(default)]
     pub value: i32,
-    pub max: i32,
+    pub max: Option<i32>,
     pub temp: Option<i32>,
     pub tempmax: Option<i32>,
     pub bonuses: Option<Value>,
@@ -128,30 +145,35 @@ pub struct Abilities {
 #[derive(Serialize, Deserialize)]
 pub struct AbilityScore {
     pub value: u8,
+    #[serde(default)]
     pub proficient: u8,
+    #[serde(default)]
     pub bonuses: AbilityScoreBonus,
+    #[serde(default)]
     pub save: String
     // Unsure what the rest means or whether it matters
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 pub struct AbilityScoreBonus {
+    #[serde(default)]
     pub check: String,
+    #[serde(default)]
     pub save: String
 }
 
 
 #[derive(Serialize, Deserialize)]
 pub struct DND5EItem {
-    #[serde(flatten)]
-    pub base: BaseItem
+    // #[serde(flatten)]
+    // pub base: BaseItem
 
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct DND5EToken {
-    #[serde(flatten)]
-    pub base: BaseToken
+    // #[serde(flatten)]
+    // pub base: BaseToken
 }
 
 pub type DND5EWorld = World<DND5EActor, DND5EItem, DND5EToken>;

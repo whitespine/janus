@@ -4,7 +4,7 @@ use serde_repr::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
-pub struct World<ItemType, ActorType, TokenType> {
+pub struct World<ActorType, ItemType, TokenType> {
     #[serde(rename="activeUsers")]
     pub active_users: Vec<String>,
     pub actors: Vec<ActorType>,
@@ -14,8 +14,8 @@ pub struct World<ItemType, ActorType, TokenType> {
 
 #[derive(Serialize, Deserialize)]
 pub struct Scene<TokenType> {
-    #[serde(flatten)]
-    pub document: Document,
+    // #[serde(flatten)]
+    // pub document: Document,
 
     pub active: bool,
     pub background: Value,
@@ -25,14 +25,12 @@ pub struct Scene<TokenType> {
 #[derive(Serialize, Deserialize)]
 pub struct Document {
     #[serde(rename="_id")]
-    pub id: String,
-    pub img: String,
+    pub id: Option<String>,
+    pub img: Option<String>,
     pub name: String,
     pub flags: Value,
     pub folder: Option<String>,
     pub ownership: OwnershipMap,
-    #[serde(rename="type")]
-    pub data_type: String,
 }
 
 #[derive(Serialize_repr, Deserialize_repr, PartialEq, Debug)]
