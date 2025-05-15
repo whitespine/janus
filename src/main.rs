@@ -38,7 +38,7 @@ fn to_one_json(payload: Payload) -> serde_json::Value {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Make a basic client
     let host = Args::parse().host;
-    let client = FoundryClient::new(&host).await?;
+    let client = FoundryClient::new(&host, "Voyeur", "").await?;
 
     println!("Attempting get world");
     let world = client.emit("world", Payload::Text(vec![])).await.unwrap();

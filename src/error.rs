@@ -1,8 +1,9 @@
-use std::fmt::{write, Display, Formatter};
+use std::fmt::{Display};
 
 /// All the errors that can occur
 #[derive(Debug)]
 pub enum FoundryClientError {
+    FailedInit(String),
     URLError(url::ParseError),
     JoinError(reqwest::Error),
     SocketError(rust_socketio::Error),
@@ -12,6 +13,8 @@ pub enum FoundryClientError {
 impl Display for FoundryClientError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            FoundryClientError::FailedInit(error) =>
+                write!(f, "Manual initialization failed {}", error),
             FoundryClientError::URLError(error) =>
                 write!(f, "Provided URL is malformed: {}", error),
             FoundryClientError::JoinError(error) =>

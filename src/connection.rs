@@ -4,9 +4,25 @@ use rust_socketio::{
     asynchronous::{Client, ClientBuilder},
     Event, Payload, TransportType,
 };
-use tokio::sync::{broadcast, mpsc};
-use tokio::time::{sleep, timeout, Duration};
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use tokio::sync::{mpsc};
+use tokio::time::{sleep, Duration};
 use url::Url;
+use crate::error::FoundryClientError::FailedInit;
+
+#[derive(Serialize, Deserialize, Debug, Default)]
+#[serde(default)]
+pub struct JoinData {
+    pub users: Vec<JoinDataUser>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default)]
+#[serde(default)]
+pub struct JoinDataUser {
+    pub _id: String,
+    pub name: String,
+}
 
 async fn promise_socket_emit(socket: &Client, event: &str, payload: Payload, timeout: Duration) -> Option<Payload> {
     // Would prefer to use oneshot, but cannot - emit_with_ack takes a FnMut, not a FnOnce, and is therefore incompatible
@@ -70,17 +86,21 @@ pub struct FoundryClient {
 impl FoundryClientBuilder {
     async fn establish_session(mut self, host: &str) -> Result<Self, FoundryClientError> {
         // Establish a session
-        let response = reqwest::get(format!("{}/join", host))
-            .await
-            .map_err(|err| FoundryClientError::JoinError(err))?;
-        let session = response.cookies().find(|cookie| cookie.name() == "session");
-        self.session_id = Some(
-            session
-                .expect("UNRECOVERABLE: Could not acquire session")
-                .value()
-                .to_string(),
-        );
-        Ok(self)
+        if let Some(client) = self.http_client.as_mut() {
+            let response = client.get(format!("{}/join", host))
+                .send().await
+                .map_err(|err| FoundryClientError::JoinError(err))?;
+            let session = response.cookies().find(|cookie| cookie.name() == "session");
+            self.session_id = Some(
+                session
+                    .expect("UNRECOVERABLE: Could not acquire session")
+                    .value()
+                    .to_string(),
+            );
+            Ok(self)
+        } else {
+            Err(FailedInit("http_client must be initialized first".into()))
+        }
     }
 
     /// Build a new http client
@@ -97,11 +117,12 @@ impl FoundryClientBuilder {
 
     async fn establish_socket(mut self, host: &str) -> Result<Self, FoundryClientError> {
         // Incorporate it into url
+        let session_id = self.session_id.clone().ok_or(FailedInit("Need to acquire a session before establishing a socket".into()))?;
         let mut session_url = Url::parse(host).map_err(|err| FoundryClientError::URLError(err))?;
         session_url.path_segments_mut().unwrap().push("socket.io/"); // Technically should be out of here, but this flag is stupid anyway
         session_url
             .query_pairs_mut()
-            .append_pair("session", &self.session_id.clone().unwrap());
+            .append_pair("session", &session_id);
 
         // Establish a socket
         let generic_callback = |evt: Event, payload: Payload, _: Client| {
@@ -113,6 +134,7 @@ impl FoundryClientBuilder {
         };
         self.socket = Some(
             ClientBuilder::new(session_url)
+                .opening_header("Cookie", format!("session={}", &session_id))
                 .transport_type(TransportType::Websocket)
                 .reconnect(true)
                 .reconnect_on_disconnect(true)
@@ -123,14 +145,8 @@ impl FoundryClientBuilder {
                 .await
                 .map_err(|err| FoundryClientError::SocketError(err))?,
         );
+        sleep(Duration::from_secs(2)).await;
         Ok(self)
-    }
-
-    /// Wait until socket and other components are ready
-    async fn wait_ready(self) -> Self {
-        // TODO: Do this better
-        sleep(Duration::from_secs(3)).await;
-        self
     }
 
     /*
@@ -143,18 +159,17 @@ impl FoundryClientBuilder {
     }
     */
 
-    pub async fn acquire_user_id(mut self) -> Result<Self, FoundryClientError> {
+    pub async fn acquire_user_id(mut self, username: &str) -> Result<Self, FoundryClientError> {
         if let Some(socket) = self.socket.as_ref() {
             let payload = promise_socket_emit(socket, "getJoinData", Payload::Text(vec![]), Duration::from_secs(2)).await;
             match payload {
-                Some(Payload::Text(mut items)) => {
-                    let item = items.pop().unwrap();
-                    self.user_id = item[0]["users"]
-                        .as_array()
-                        .unwrap()
-                        .iter()
-                        .find(|user| user["name"] == "Voyeur")
-                        .map(|x| x["_id"].to_string());
+                Some(Payload::Text(items)) => {
+                    let item = &items.get(0).unwrap();
+                    let item = &item.as_array().unwrap()[0];
+                    let data: JoinData = serde_json::from_value(item.clone()).expect("UNRECOVERABLE: getJoinData returned malformed data");
+                    self.user_id = data.users.iter()
+                        .find(|user| user.name == username)
+                        .map(|x| x._id.clone());
                 }
                 _ => panic!("UNRECOVERABLE: getJoinData returned non-json data"),
             };
@@ -164,13 +179,25 @@ impl FoundryClientBuilder {
 
         println!("Got userid: {:?}", self.user_id);
         if let None = self.user_id {
-            return Err(FoundryClientError::NoUserError("Voyeur".into()));
+            return Err(FoundryClientError::NoUserError(username.into()));
         }
 
         Ok(self)
     }
 
-    pub async fn login(mut self) -> Result<Self, FoundryClientError> {
+    pub async fn login(self, host: &str, password: &str) -> Result<Self, FoundryClientError> {
+        if let Some(client) = self.http_client.as_ref() {
+            let payload = json!({
+                    "userid": self.user_id,
+                    "password": password,
+                    "action": "join"
+                });
+            // let response = client.post("https://echo.free.beeceptor.com")
+            let response = client.post(format!("{}/join", host))
+                .json(&payload)
+                .send().await
+                .map_err(|err| FoundryClientError::JoinError(err))?;
+        }
         Ok(self)
     }
 
@@ -194,18 +221,18 @@ impl FoundryClientBuilder {
 }
 
 impl FoundryClient {
-    pub async fn new(host: &str) -> Result<FoundryClient, Box<dyn std::error::Error>> {
+    pub async fn new(host: &str, username: &str, password: &str) -> Result<FoundryClient, Box<dyn std::error::Error>> {
         let client = FoundryClientBuilder::default()
             .build_client()
             .establish_session(host)
             .await?
             .establish_socket(host)
             .await?
-            .wait_ready()
-            .await
-            .acquire_user_id()
+            .acquire_user_id(username)
             .await?
-            .login()
+            .login(host, password)
+            .await?
+            .establish_socket(host) // RE-establish, now with a logged in session
             .await?
             .build();
         Ok(client)
