@@ -12,8 +12,9 @@ use tokio::io::AsyncWriteExt;
 
 use poise::serenity_prelude as serenity;
 use std::env;
-use std::fmt::format;
 use kv::Integer;
+use crate::error::CommandError;
+use crate::error::CommandError::InvalidAttribute;
 
 static PLAYERS_BUCKET: &str = "player_characters";
 
@@ -42,6 +43,9 @@ struct DiscordState {
 type DiscordError = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, DiscordState, DiscordError>;
 
+
+
+
 /// Associates a user with an actor
 #[poise::command(slash_command)]
 async fn assoc(
@@ -68,7 +72,7 @@ async fn assoc(
             ctx.say(format!("Successfully associated with actor id {}", id)).await?;
         },
         _ => {
-            ctx.say("No actor with that name found. Note that this is case sensitive").await?;
+            Err(CommandError::CharacterNotFound(name))?;
         },
     }
 
@@ -90,28 +94,28 @@ async fn roll(
     let actor_id = bucket.get(&user_id)?;
 
     // See if it works
-    let actor_id = match actor_id {
-        None => {
-            ctx.say("No user associated with your account. Use /assoc").await?;
-            return Ok(())
-        },
-        Some(id) => id
-    };
+    let actor_id = actor_id.ok_or(CommandError::MissingAssocChar)?;
 
-    // Attempt to find character, and roll as appropriately
-    match world.actors.iter().find(|actor| {
+    // Attempt to find character system data
+    let actor =  world.actors.iter().find(|actor| {
         if let DND5EActor::character { base, .. } = actor {
             return base.document.id == Some(actor_id.clone());
         }
         false
-    }) {
-        Some(DND5EActor::character { system, .. }) => {
-            ctx.say(format!("Found your character. They have a strength of {}", 1 /*system.abilities.str.value */)).await?;
-        },
-        _ => {
-            ctx.say(format!("Unable to find actor id {:#?}. You may need to redo /assoc, as your actor appears to be gone! NPCs not yet supported.", actor_id)).await?;
-        }
-    }
+    }).ok_or(CommandError::InvalidAssocChar)?;
+    let DND5EActor::character { system, .. } = actor else { Err(CommandError::InvalidAssocChar)? };
+
+    // Do stuff conditionally
+    let stat_value = match stat.as_str() {
+        "str" | "strength" => system.abilities.str.value,
+        "dex" | "dexterity" => system.abilities.str.value,
+        "cha" | "charisma" => system.abilities.str.value,
+        "int" | "intelligence" => system.abilities.str.value,
+        "wis" | "wisdom" => system.abilities.str.value,
+        "con" | "constitution" => system.abilities.str.value,
+        _ => Err(InvalidAttribute(stat))?
+    };
+    ctx.say(format!("Found your character. They have a strength of {}", system.abilities.str.value)).await?;
 
     Ok(())
 }
@@ -154,7 +158,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![roll()],
+            commands: vec![roll(), assoc()],
             ..Default::default()
         })
         .setup(|ctx, _ready, framework| {

@@ -32,7 +32,7 @@ pub enum DND5EActor {
 #[derive(Serialize, Deserialize)]
 pub struct CharacterSystem {
     pub attributes: Attributes,
-    // pub abilities: Abilities,
+    pub abilities: Abilities,
     pub skills: Skills
 }
 
@@ -146,12 +146,12 @@ pub struct Abilities {
 #[derive(Serialize, Deserialize)]
 pub struct AbilityScore {
     pub value: u8,
-    #[serde(default)]
-    pub proficient: u8,
-    #[serde(default)]
-    pub bonuses: AbilityScoreBonus,
-    #[serde(default)]
-    pub save: String
+    // #[serde(default)]
+    // pub proficient: u8,
+    // #[serde(default)]
+    // pub bonuses: AbilityScoreBonus,
+    // #[serde(default)]
+    // pub save: String
     // Unsure what the rest means or whether it matters
 }
 

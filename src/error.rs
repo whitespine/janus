@@ -31,3 +31,33 @@ impl Display for FoundryClientError {
 }
 
 impl std::error::Error for FoundryClientError {}
+
+/// Specific errors with discord commands
+#[derive(Debug)]
+pub enum CommandError {
+    /// Associating a character failed
+    CharacterNotFound(String),
+    /// No character was associated
+    MissingAssocChar,
+    /// An associated character was provided but could not be resolved / is not valid for this operation
+    InvalidAssocChar,
+    /// A provided stat or attribute
+    InvalidAttribute(String),
+}
+
+impl Display for CommandError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CommandError::CharacterNotFound(name) =>
+                write!(f, "No actor named '{}' found. Be careful about case sensitivity", name),
+            CommandError::MissingAssocChar =>
+                write!(f, "You must first /assoc with a character in the foundry world"),
+            CommandError::InvalidAssocChar =>
+                write!(f, "Your currently associated character is invalid/deleted. /assoc with a character in the foundry world"),
+            CommandError::InvalidAttribute(name) =>
+                write!(f, "The stat {} cannot be rolled", name),
+        }
+    }
+}
+
+impl std::error::Error for CommandError {}
