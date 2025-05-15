@@ -4,15 +4,16 @@ use rust_socketio::{
     asynchronous::{Client, ClientBuilder},
     Event, Payload, TransportType,
 };
-use tokio::sync::{broadcast};
+use tokio::sync::{broadcast, mpsc};
 use tokio::time::{sleep, timeout, Duration};
 use url::Url;
 
 async fn promise_socket_emit(socket: &Client, event: &str, payload: Payload, timeout: Duration) -> Option<Payload> {
     // Would prefer to use oneshot, but cannot - emit_with_ack takes a FnMut, not a FnOnce, and is therefore incompatible
-    let (tx, mut rx) = broadcast::channel::<Payload>(1);
+    let (tx, mut rx) = mpsc::channel::<Payload>(1);
 
     // Send the message
+    // Timeout doesn't work. At least, it doesn't immediately
     socket
         .emit_with_ack(
             event,
@@ -21,7 +22,7 @@ async fn promise_socket_emit(socket: &Client, event: &str, payload: Payload, tim
             move |payload: Payload, _| {
                 let listener_tx = tx.clone(); // This is the only way I could get this code to compile
                 async move {
-                    listener_tx.send(payload).expect("Cannot send payload");
+                    listener_tx.send(payload).await.expect("Failed to send payload");
                 }
                 .boxed()
             },
@@ -30,9 +31,15 @@ async fn promise_socket_emit(socket: &Client, event: &str, payload: Payload, tim
         .expect("Server unreachable");
 
     // Await the value that the emit-with-ack has sent
-    match rx.recv().await {
-        Ok(p) => Some(p),
-        Err(_) => None,
+    let mut elapsed = Duration::from_secs(0);
+    while rx.is_empty() && elapsed < timeout {
+        sleep(Duration::from_millis(100)).await;
+        elapsed += Duration::from_millis(100);
+    }
+    if rx.is_empty() {
+        None
+    } else {
+        rx.recv().await
     }
 }
 
