@@ -31,8 +31,9 @@ pub enum DND5EActor {
 
 #[derive(Serialize, Deserialize)]
 pub struct CharacterSystem {
-    attributes: Attributes,
-    skills: Skills
+    pub attributes: Attributes,
+    // pub abilities: Abilities,
+    pub skills: Skills
 }
 
 

@@ -1,15 +1,21 @@
 mod connection;
+mod dnd5e;
 pub mod error;
 mod world;
-mod dnd5e;
 
+use crate::connection::FoundryClient;
+use crate::dnd5e::{DND5EActor, DND5EWorld};
 use clap::Parser;
 use rust_socketio::Payload;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
-use tokio::time::{sleep, Duration};
-use crate::connection::FoundryClient;
-use crate::dnd5e::{DND5EActor, DND5EWorld};
+
+use poise::serenity_prelude as serenity;
+use std::env;
+use std::fmt::format;
+use kv::Integer;
+
+static PLAYERS_BUCKET: &str = "player_characters";
 
 /// Simple program to greet a person
 #[derive(Parser, Debug)]
@@ -18,25 +24,99 @@ struct Args {
     /// Url to connect to. Include http(s):// and any trailing suffix, if needed
     #[arg(long)]
     host: String,
-
-    #[arg(long, action = clap::ArgAction::Count)]
-    add_session: u8,
-    // Number of times to greet
-    // #[arg(short, long, default_value_t = 1)]
-    // count: u8,
 }
 
 fn to_one_json(payload: Payload) -> serde_json::Value {
     // if let Payload::Text(v) = payload;
     match payload {
-        Payload::Text(mut items) => {
-            items.remove(0)
-        },
+        Payload::Text(mut items) => items.remove(0),
         _ => panic!("Not json!"),
     }
 }
 
-async fn get_world(client: &FoundryClient) -> Result<DND5EWorld, Box<dyn std::error::Error>> {
+// Our poise types
+struct DiscordState {
+    foundry: FoundryClient,
+    store: kv::Store
+} // User data, which is stored and accessible in all command invocations
+type DiscordError = Box<dyn std::error::Error + Send + Sync>;
+type Context<'a> = poise::Context<'a, DiscordState, DiscordError>;
+
+/// Associates a user with an actor
+#[poise::command(slash_command)]
+async fn assoc(
+    ctx: Context<'_>,
+    #[description = "Actor Name"] name: String,
+) -> Result<(), DiscordError> {
+    let foundry = &ctx.data().foundry;
+    let world = get_world(foundry).await?;
+
+    // Figure out who their user id
+    let user_id = kv::Integer::from(ctx.author().id.get());
+
+    match world.actors.iter().find_map(|actor| {
+        if let DND5EActor::character { base, .. } = actor {
+            if base.document.name == name && base.document.id.is_some() {
+                return Some(base.document.id.clone().unwrap());
+            }
+        }
+        None
+    }) {
+        Some(id) => { // I clearly fucked up the typings here but... ???
+            let bucket: kv::Bucket<Integer, String> = ctx.data().store.bucket(Some(PLAYERS_BUCKET))?;
+            bucket.set(&user_id, &id)?;
+            ctx.say(format!("Successfully associated with actor id {}", id)).await?;
+        },
+        _ => {
+            ctx.say("No actor with that name found. Note that this is case sensitive").await?;
+        },
+    }
+
+    Ok(())
+}
+
+/// Rolls a stat
+#[poise::command(slash_command)]
+async fn roll(
+    ctx: Context<'_>,
+    #[description = "Attribute"] stat: String,
+) -> Result<(), DiscordError> {
+    let foundry = &ctx.data().foundry;
+    let world = get_world(foundry).await?;
+
+    // Figure out who they should be
+    let user_id = kv::Integer::from(ctx.author().id.get());
+    let bucket: kv::Bucket<Integer, String> = ctx.data().store.bucket(Some(PLAYERS_BUCKET))?;
+    let actor_id = bucket.get(&user_id)?;
+
+    // See if it works
+    let actor_id = match actor_id {
+        None => {
+            ctx.say("No user associated with your account. Use /assoc").await?;
+            return Ok(())
+        },
+        Some(id) => id
+    };
+
+    // Attempt to find character, and roll as appropriately
+    match world.actors.iter().find(|actor| {
+        if let DND5EActor::character { base, .. } = actor {
+            return base.document.id == Some(actor_id.clone());
+        }
+        false
+    }) {
+        Some(DND5EActor::character { system, .. }) => {
+            ctx.say(format!("Found your character. They have a strength of {}", 1 /*system.abilities.str.value */)).await?;
+        },
+        _ => {
+            ctx.say(format!("Unable to find actor id {:#?}. You may need to redo /assoc, as your actor appears to be gone! NPCs not yet supported.", actor_id)).await?;
+        }
+    }
+
+    Ok(())
+}
+
+async fn get_world(client: &FoundryClient) -> Result<DND5EWorld, Box<dyn std::error::Error + Send + Sync>> {
     println!("Attempting get world");
     let payload = client.emit("world", Payload::Text(vec![])).await.unwrap();
     println!("Attempting parse world");
@@ -60,25 +140,40 @@ async fn get_world(client: &FoundryClient) -> Result<DND5EWorld, Box<dyn std::er
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Make a basic client
+    // Set up foundry client
     let host = Args::parse().host;
-    let client = FoundryClient::new(&host, "Voyeur", "").await?;
+    let foundry = FoundryClient::new(&host, "Voyeur", "").await?;
 
-    for actor in get_world(&client).await?.actors.iter() {
-        match actor {
-            DND5EActor::npc { base, .. } => {
-                println!("Found an npc named {}", base.document.name)
-            }
-            DND5EActor::character { base, .. } => {
-                println!("Found a player named {}", base.document.name)
-            },
-            _ => {}
-        }
-    }
+    // Set up discord client
+    let token = env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN");
+    let intents = serenity::GatewayIntents::non_privileged();
 
+    // Set up persistence
+    let  cfg = kv::Config::new("./janus_db");
+    let store = kv::Store::new(cfg)?;
 
-    println!("Finished, waiting for shutdown");
-    sleep(Duration::from_secs(10)).await;
+    let framework = poise::Framework::builder()
+        .options(poise::FrameworkOptions {
+            commands: vec![roll()],
+            ..Default::default()
+        })
+        .setup(|ctx, _ready, framework| {
+            Box::pin(async move {
+                poise::builtins::register_globally(ctx, &framework.options().commands).await?;
+                Ok(DiscordState {
+                    foundry,
+                    store
+                })
+            })
+        })
+        .build();
+
+    let client = serenity::ClientBuilder::new(token, intents)
+        .framework(framework)
+        .await;
+    client.unwrap().start().await.unwrap();
+
+    println!("Finished");
     // socket.disconnect().expect("Disconnect failed");
     Ok(())
 }
