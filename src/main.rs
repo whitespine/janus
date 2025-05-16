@@ -12,11 +12,10 @@ use tokio::io::AsyncWriteExt;
 
 use poise::serenity_prelude as serenity;
 use std::env;
-use kv::Integer;
+use caith::Roller;
+use pickledb::{PickleDb, PickleDbDumpPolicy, SerializationMethod};
 use crate::error::CommandError;
 use crate::error::CommandError::InvalidAttribute;
-
-static PLAYERS_BUCKET: &str = "player_characters";
 
 /// Simple program to greet a person
 #[derive(Parser, Debug)]
@@ -38,7 +37,7 @@ fn to_one_json(payload: Payload) -> serde_json::Value {
 // Our poise types
 struct DiscordState {
     foundry: FoundryClient,
-    store: kv::Store
+    store: tokio::sync::Mutex<PickleDb>
 } // User data, which is stored and accessible in all command invocations
 type DiscordError = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, DiscordState, DiscordError>;
@@ -56,7 +55,7 @@ async fn assoc(
     let world = get_world(foundry).await?;
 
     // Figure out who their user id
-    let user_id = kv::Integer::from(ctx.author().id.get());
+    let user_id = ctx.author().id.get();
 
     match world.actors.iter().find_map(|actor| {
         if let DND5EActor::character { base, .. } = actor {
@@ -67,9 +66,9 @@ async fn assoc(
         None
     }) {
         Some(id) => { // I clearly fucked up the typings here but... ???
-            let bucket: kv::Bucket<Integer, String> = ctx.data().store.bucket(Some(PLAYERS_BUCKET))?;
-            bucket.set(&user_id, &id)?;
-            ctx.say(format!("Successfully associated with actor id {}", id)).await?;
+            let mut store = ctx.data().store.lock().await;
+            store.set(&user_id.to_string(), &id)?;
+            ctx.say(format!("Successfully associated user id {} with actor id {}", user_id, id)).await?;
         },
         _ => {
             Err(CommandError::CharacterNotFound(name))?;
@@ -89,9 +88,9 @@ async fn roll(
     let world = get_world(foundry).await?;
 
     // Figure out who they should be
-    let user_id = kv::Integer::from(ctx.author().id.get());
-    let bucket: kv::Bucket<Integer, String> = ctx.data().store.bucket(Some(PLAYERS_BUCKET))?;
-    let actor_id = bucket.get(&user_id)?;
+    let user_id = ctx.author().id.get();
+    let store = ctx.data().store.lock().await;
+    let actor_id: Option<String> = store.get(&user_id.to_string());
 
     // See if it works
     let actor_id = actor_id.ok_or(CommandError::MissingAssocChar)?;
@@ -148,7 +147,7 @@ async fn roll(
         "slt" | "sleight" | "sleight of hand" => (system.abilities.dex.value, system.skills.sleight_of_hand.value.unwrap_or(0f32)),
         "ste" | "stealth" => (system.abilities.dex.value, system.skills.stealth.value.unwrap_or(0f32)),
         "sur" | "survival" => (system.abilities.wis.value, system.skills.survival.value.unwrap_or(0f32)),
-        _ => Err(InvalidAttribute(stat))?
+        _ => return Err(InvalidAttribute(stat).into())
     };
 
     // Now coerce the proficiency to an integer, use a small rounding factor to ensure its more reliable
@@ -156,15 +155,15 @@ async fn roll(
 
     // While we're at it, convert the stat to a bonus
     let ability_mod = (((ability_score as f32) - 10f32) / 2f32).floor() as i32;
-    ctx.say(format!("Were you to roll this, you would do so with a base bonus of {}, and a proficiency modifier of {}", ability_mod, proficiency)).await?;
+    let formula = format!("1d20 + {}", proficiency + ability_mod);
+    let result = Roller::new(&formula)?.roll()?;
+    ctx.say(format!("Rolling {}: {} → {}", stat, formula, result)).await?;
 
     Ok(())
 }
 
 async fn get_world(client: &FoundryClient) -> Result<DND5EWorld, Box<dyn std::error::Error + Send + Sync>> {
-    println!("Attempting get world");
     let payload = client.emit("world", Payload::Text(vec![])).await.unwrap();
-    println!("Attempting parse world");
     let json = to_one_json(payload);
     let raw_world = json.get(0).unwrap();
     let raw_world_debug = serde_json::to_string_pretty(json.get(0).unwrap()).unwrap();
@@ -194,8 +193,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let intents = serenity::GatewayIntents::non_privileged();
 
     // Set up persistence
-    let  cfg = kv::Config::new("./janus_db");
-    let store = kv::Store::new(cfg)?;
+    let store = PickleDb::load("janusdb", PickleDbDumpPolicy::AutoDump, SerializationMethod::Json)
+        .unwrap_or_else(|_| PickleDb::new("janusdb", PickleDbDumpPolicy::AutoDump, SerializationMethod::Json));
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
@@ -207,7 +206,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
                 Ok(DiscordState {
                     foundry,
-                    store
+                    store: tokio::sync::Mutex::new(store)
                 })
             })
         })
