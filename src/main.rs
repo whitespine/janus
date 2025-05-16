@@ -83,6 +83,7 @@ async fn assoc(
 async fn roll(
     ctx: Context<'_>,
     #[description = "Attribute"] stat: String,
+    #[description = "adv/dis"] adv_or_dis: Option<String>
 ) -> Result<(), DiscordError> {
     let foundry = &ctx.data().foundry;
     let world = get_world(foundry).await?;
@@ -153,9 +154,19 @@ async fn roll(
     // Now coerce the proficiency to an integer, use a small rounding factor to ensure its more reliable
     let proficiency = ((proficiency as f32) * proficiency_factor + 0.25f32).floor() as i32;
 
+    // Decide base roll based on adv/disadv
+    let mut d20 = "1d20";
+    if let Some(adv_or_dis) = adv_or_dis {
+        d20 = match adv_or_dis.as_str() {
+            "adv" | "advantage" => "2d20K1",
+            "dis" | "disadvantage" => "2d20k1",
+            _ => "2d20kl1",
+        };
+    }
+
     // While we're at it, convert the stat to a bonus
     let ability_mod = (((ability_score as f32) - 10f32) / 2f32).floor() as i32;
-    let formula = format!("1d20 + {}", proficiency + ability_mod);
+    let formula = format!("{} + {}", d20, proficiency + ability_mod);
     let result = Roller::new(&formula)?.roll()?;
     ctx.say(format!("Rolling {}: {} → {}", stat, formula, result)).await?;
 
