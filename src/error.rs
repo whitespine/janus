@@ -1,63 +1,36 @@
 use std::fmt::{Display};
+use thiserror::Error;
 
 /// All the errors that can occur
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum FoundryClientError {
+    #[error("Manual initialization of Foundry Client failed")]
     FailedInit(String),
-    URLError(url::ParseError),
-    JoinError(reqwest::Error),
-    SocketError(rust_socketio::Error),
+    #[error("Provided host {0} was unable to be parsed as a url")]
+    URLError(#[from] url::ParseError),
+    #[error("HTTP Connection error: {0}")]
+    JoinError(#[from] reqwest::Error),
+    #[error("Socket Connection error: {0}")]
+    SocketError(#[from] rust_socketio::Error),
+    #[error("Failed to login as user: {0}")]
     NoUserError(String),
+    #[error("Failed to parse initial userdata: {path} within {value} is not formatted as expected - perhaps a version incompatibility?")]
     MalformedData {path: String, value: serde_json::Value}
 }
-impl Display for FoundryClientError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            FoundryClientError::FailedInit(error) =>
-                write!(f, "Manual initialization failed {}", error),
-            FoundryClientError::URLError(error) =>
-                write!(f, "Provided URL is malformed: {}", error),
-            FoundryClientError::JoinError(error) =>
-                write!(f, "Unable to join server: {}", error),
-            FoundryClientError::SocketError(error) =>
-                write!(f, "Unable to establish socket connection: {}", error),
-            FoundryClientError::NoUserError(name) =>
-                write!(f, "No user named {} found", name),
-            FoundryClientError::MalformedData { path, value } => {
-                write!(f, "Malformed data found at {} within data {}", path, value)
-            }
-        }
-    }
-}
-
-impl std::error::Error for FoundryClientError {}
 
 /// Specific errors with discord commands
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum CommandError {
     /// Associating a character failed
+    #[error("No actor named '{0}' found. Be careful about case sensitivity")]
     CharacterNotFound(String),
     /// No character was associated
+    #[error("You must first /assoc with a character name in the foundry world")]
     MissingAssocChar,
     /// An associated character was provided but could not be resolved / is not valid for this operation
+    #[error("Your currently associated character is invalid/deleted. /assoc with a new character in the foundry world")]
     InvalidAssocChar,
     /// A provided stat or attribute
+    #[error("The attribute you tried to roll ({0}) was not recognized")]
     InvalidAttribute(String),
 }
-
-impl Display for CommandError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            CommandError::CharacterNotFound(name) =>
-                write!(f, "No actor named '{}' found. Be careful about case sensitivity", name),
-            CommandError::MissingAssocChar =>
-                write!(f, "You must first /assoc with a character in the foundry world"),
-            CommandError::InvalidAssocChar =>
-                write!(f, "Your currently associated character is invalid/deleted. /assoc with a character in the foundry world"),
-            CommandError::InvalidAttribute(name) =>
-                write!(f, "The stat {} cannot be rolled", name),
-        }
-    }
-}
-
-impl std::error::Error for CommandError {}
