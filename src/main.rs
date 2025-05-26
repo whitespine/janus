@@ -2,6 +2,7 @@ mod connection;
 mod dnd5e;
 pub mod error;
 mod world;
+mod deno;
 
 use crate::connection::FoundryClient;
 use crate::dnd5e::{DND5EActor, DND5EItem, DND5EWorld};
@@ -14,6 +15,7 @@ use poise::serenity_prelude as serenity;
 use std::env;
 use caith::Roller;
 use pickledb::{PickleDb, PickleDbDumpPolicy, SerializationMethod};
+use crate::deno::run_js;
 use crate::error::CommandError;
 use crate::error::CommandError::InvalidAttribute;
 
@@ -32,6 +34,9 @@ struct Args {
     /// User password. Defaults to empty
     #[arg(long, default_missing_value(None))]
     password: Option<String>,
+
+    #[arg(long)]
+    vtt: String,
 }
 
 fn to_one_json(payload: Payload) -> serde_json::Value {
@@ -202,7 +207,17 @@ async fn get_world(client: &FoundryClient) -> Result<DND5EWorld, Box<dyn std::er
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let args = Args::parse();
+
+    if let Err(error) = run_js(&args).await {
+        eprintln!("error: {}", error);
+    }
+
+    Ok(())
+}
+
+async fn old_main() -> Result<(), Box<dyn std::error::Error>> {
     // Set up foundry client
     let args = Args::parse();
     let foundry = FoundryClient::new(&args.host, &args.user, &args.password.unwrap_or("".to_owned())).await?;
