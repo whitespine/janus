@@ -211,7 +211,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let args = Args::parse();
 
     if let Err(error) = run_js(&args).await {
-        eprintln!("error: {}", error);
+        eprintln!("error: {:#?} - {:#?}", error, error.backtrace());
     }
 
     Ok(())

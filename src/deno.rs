@@ -4,10 +4,9 @@ use std::rc::Rc;
 use url::Url;
 use crate::Args;
 
-fn vtt_path(args: &Args, subpath: &str) -> Url {
-    let vtt = std::path::Path::new(&args.vtt);
-    let abs_vtt = std::path::absolute(vtt).expect("Bad Path"); // We don't do this dynamically
-    deno_core::resolve_path(subpath, abs_vtt.as_path()).expect("Bad Url")
+fn vtt_path(args: &Args, subpath: &str) -> std::path::PathBuf {
+    let vtt = std::path::Path::new(&args.vtt).join(subpath);
+    std::path::absolute(vtt).expect("Bad Path") // We don't do this dynamically
 }
 
 async fn load_script(runtime: &mut deno_core::JsRuntime, specifier: &str, script: String) -> Result<(), Error> {
@@ -21,9 +20,9 @@ async fn load_script(runtime: &mut deno_core::JsRuntime, specifier: &str, script
     Ok(())
 }
 
-async fn load_vtt(runtime: &mut deno_core::JsRuntime, path: &str) -> Result<(), Error> {
-    // load_script(runtime, )
-    todo!()
+async fn load_vtt(runtime: &mut deno_core::JsRuntime, specifier: &str, path: std::path::PathBuf) -> Result<(), Error> {
+    let script = fs::read_to_string(path)?;
+    load_script(runtime, specifier, script).await
 }
 
 pub async fn run_js(args: &Args) -> Result<(), Error> {
@@ -36,6 +35,8 @@ pub async fn run_js(args: &Args) -> Result<(), Error> {
     load_script(&mut js_runtime, "voyeur:scripts/shim.js", include_str!("../scripts/shim.js").to_string()).await?;
 
     // Load all other deps from vtt
+    load_vtt(&mut js_runtime, "voyeur:vendor.mjs", vtt_path(args, "./public/scripts/vendor.mjs")).await?;
+    // load_vtt(&mut js_runtime, "./foundry.mjs", vtt_path(args, "./public/scripts/foundry.mjs")).await?;
 
     // Load our main module
     let mod_foundry = js_runtime.load_main_es_module_from_code(

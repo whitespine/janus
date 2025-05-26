@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use crate::world::{World, BaseActor, BaseToken, BaseItem, Document};
+use crate::world::{World, BaseActor, BaseItem };
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
