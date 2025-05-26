@@ -24,6 +24,14 @@ struct Args {
     /// Url to connect to. Include http(s):// and any trailing suffix, if needed
     #[arg(long)]
     host: String,
+
+    /// Name of user to connect as
+    #[arg(long)]
+    user: String,
+
+    /// User password. Defaults to empty
+    #[arg(long, default_missing_value(None))]
+    password: Option<String>,
 }
 
 fn to_one_json(payload: Payload) -> serde_json::Value {
@@ -196,8 +204,8 @@ async fn get_world(client: &FoundryClient) -> Result<DND5EWorld, Box<dyn std::er
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Set up foundry client
-    let host = Args::parse().host;
-    let foundry = FoundryClient::new(&host, "Voyeur", "").await?;
+    let args = Args::parse();
+    let foundry = FoundryClient::new(&args.host, &args.user, &args.password.unwrap_or("".to_owned())).await?;
 
     // Set up discord client
     let token = env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN");
