@@ -2,7 +2,7 @@ console.log("hio");
 
 /*
 (async function() {
-    await import(`${process.env.VTT}/main.mjs`);
+    await import(`${process.env.VTT}/main.js`);
 })();
 
  */

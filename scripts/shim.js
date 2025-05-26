@@ -1,4 +1,4 @@
-// runtime.js
+// shim.js
 const { core } = Deno;
 
 function argsToMessage(...args) {
