@@ -1,4 +1,3 @@
-use std::fmt::{Display};
 use thiserror::Error;
 
 /// All the errors that can occur
