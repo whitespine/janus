@@ -1,4 +1,4 @@
-# Janus - The Twin Faced God of Doorwards
+# Janus - The Twin Faced God of Doorways
 
 This Discord bot is meant to provide a method of easy interaction with your FoundryVTT server while you aren't at a machine that would make that otherwise convenient.
 
