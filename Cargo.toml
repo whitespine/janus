@@ -20,4 +20,8 @@ poise = "0.6.1"
 pickledb = "0.5.1"
 caith = "4.2.4"
 thiserror = "2.0.12"
-deno_runtime = "0.213.0"
+rustyscript = {  version = "0.11.0", features = [] }
+
+# https://github.com/rscarson/rustyscript/issues/332
+[patch.crates-io]
+deno_media_type = { git = 'https://github.com/denoland/deno_media_type', tag = "0.2.6" }

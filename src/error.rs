@@ -17,6 +17,14 @@ pub enum FoundryClientError {
     MalformedData {path: String, value: serde_json::Value}
 }
 
+#[derive(Error, Debug)]
+pub enum ScriptError {
+    #[error("Couldn't load core: {0}")]
+    ScriptLoadFailure(std::io::Error),
+    #[error("Script error: {0}")]
+    JsError(#[from] rustyscript::Error),
+}
+
 /// Specific errors with discord commands
 #[derive(Error, Debug)]
 pub enum CommandError {

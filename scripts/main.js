@@ -1,6 +1,9 @@
-console.log("hio");
-// console.log(URL);
-import fs from "node:fs";
+// import fs from "node:fs";
+
+export const main = async () => {
+    console.log("Hoi!");
+    return "done";
+}
 
 /*
 (async function() {

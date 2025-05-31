@@ -2,7 +2,7 @@ mod connection;
 mod dnd5e;
 pub mod error;
 mod world;
-mod deno;
+mod script;
 
 use crate::connection::FoundryClient;
 use crate::dnd5e::{DND5EActor, DND5EItem, DND5EWorld};
@@ -13,9 +13,10 @@ use tokio::io::AsyncWriteExt;
 
 use poise::serenity_prelude as serenity;
 use std::env;
+use std::rc::Rc;
 use caith::Roller;
 use pickledb::{PickleDb, PickleDbDumpPolicy, SerializationMethod};
-use crate::deno::run_js;
+use crate::script::{FoundryRuntime};
 use crate::error::CommandError;
 use crate::error::CommandError::InvalidAttribute;
 
@@ -206,15 +207,24 @@ async fn get_world(client: &FoundryClient) -> Result<DND5EWorld, Box<dyn std::er
     Ok(world)
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+fn main() {
     let args = Args::parse();
 
-    if let Err(error) = run_js(&args).await {
-        eprintln!("error: {:#?} - {:#?}", error, error.backtrace());
-    }
+    let tokio_runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let tokio_runtime = Rc::new(tokio_runtime);
 
-    Ok(())
+    let mut foundry_runtime = FoundryRuntime::new(&args, tokio_runtime.clone());
+
+    tokio_runtime.block_on(async  {
+        let expression = "'foo' + 'bar'";
+        let result = foundry_runtime.run_in_foundry(expression).await;
+        let result = result.unwrap_or_else(|err| format!("ERROR: {}", err));
+        dbg!(expression);
+        dbg!(result);
+    });
 }
 
 async fn old_main() -> Result<(), Box<dyn std::error::Error>> {
